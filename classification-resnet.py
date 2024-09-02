@@ -71,75 +71,75 @@ else:
     print("No checkpoint found, starting from pre-trained model")
 
 # Training loop
-# for epoch in range(start_epoch, NUM_EPOCHS):
-#     print(f'Epoch {epoch+1}/{NUM_EPOCHS}')
-#     print('-' * 20)
+for epoch in range(start_epoch, NUM_EPOCHS):
+    print(f'Epoch {epoch+1}/{NUM_EPOCHS}')
+    print('-' * 20)
 
-#     start_time = time.time()  # Start timing
+    start_time = time.time()  # Start timing
 
-#     # Each epoch has a training and validation phase
-#     for phase in ['train', 'val']:
-#         if phase == 'train':
-#             model.train()
-#         else:
-#             model.eval()
+    # Each epoch has a training and validation phase
+    for phase in ['train', 'val']:
+        if phase == 'train':
+            model.train()
+        else:
+            model.eval()
 
-#         running_loss = 0.0
-#         running_corrects = 0
+        running_loss = 0.0
+        running_corrects = 0
 
-#         # Use tqdm for progress bar
-#         for inputs, labels in tqdm(dataloaders[phase], desc=f'{phase.capitalize()} Phase', unit='batch'):
-#             inputs = inputs.to(device)
-#             labels = labels.to(device)
+        # Use tqdm for progress bar
+        for inputs, labels in tqdm(dataloaders[phase], desc=f'{phase.capitalize()} Phase', unit='batch'):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
 
-#             # Zero the parameter gradients
-#             optimizer.zero_grad()
+            # Zero the parameter gradients
+            optimizer.zero_grad()
 
-#             # Forward pass
-#             with torch.set_grad_enabled(phase == 'train'):
-#                 outputs = model(inputs)
-#                 _, preds = torch.max(outputs, 1)
-#                 loss = criterion(outputs, labels)
+            # Forward pass
+            with torch.set_grad_enabled(phase == 'train'):
+                outputs = model(inputs)
+                _, preds = torch.max(outputs, 1)
+                loss = criterion(outputs, labels)
 
-#                 # Backward pass and optimize only if in training phase
-#                 if phase == 'train':
-#                     loss.backward()
-#                     optimizer.step()
+                # Backward pass and optimize only if in training phase
+                if phase == 'train':
+                    loss.backward()
+                    optimizer.step()
 
-#             # Statistics
-#             running_loss += loss.item() * inputs.size(0)
-#             running_corrects += torch.sum(preds == labels.data)
+            # Statistics
+            running_loss += loss.item() * inputs.size(0)
+            running_corrects += torch.sum(preds == labels.data)
 
-#         epoch_loss = running_loss / len(dataloaders[phase].dataset)
-#         epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
+        epoch_loss = running_loss / len(dataloaders[phase].dataset)
+        epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
 
-#         print(f'{phase.capitalize()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+        print(f'{phase.capitalize()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
-#         # Deep copy the model if it has better accuracy
-#         if phase == 'val' and epoch_acc > best_acc:
-#             best_acc = epoch_acc
-#             best_epoch = epoch
-#             torch.save({
-#                 'model_state_dict': model.state_dict(),
-#                 'optimizer_state_dict': optimizer.state_dict(),
-#                 'epoch': epoch,
-#                 'best_acc': best_acc,
-#                 'best_epoch': best_epoch
-#             }, os.path.join(MODEL_DIR, 'best.pth'))
-#             print(f'Best model saved with accuracy: {best_acc:.4f}')
+        # Deep copy the model if it has better accuracy
+        if phase == 'val' and epoch_acc > best_acc:
+            best_acc = epoch_acc
+            best_epoch = epoch
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'epoch': epoch,
+                'best_acc': best_acc,
+                'best_epoch': best_epoch
+            }, os.path.join(MODEL_DIR, 'best.pth'))
+            print(f'Best model saved with accuracy: {best_acc:.4f}')
 
-#     epoch_time = time.time() - start_time  # End timing
-#     print(f'Epoch {epoch+1} completed in {epoch_time:.2f} seconds\n')
+    epoch_time = time.time() - start_time  # End timing
+    print(f'Epoch {epoch+1} completed in {epoch_time:.2f} seconds\n')
 
-# # Save the last model weights
-# torch.save({
-#     'model_state_dict': model.state_dict(),
-#     'optimizer_state_dict': optimizer.state_dict(),
-#     'epoch': NUM_EPOCHS - 1,
-#     'best_acc': best_acc,
-#     'best_epoch': best_epoch
-# }, os.path.join(MODEL_DIR, 'last.pth'))
-# print(f'Last model saved at epoch {NUM_EPOCHS}')
+# Save the last model weights
+torch.save({
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'epoch': NUM_EPOCHS - 1,
+    'best_acc': best_acc,
+    'best_epoch': best_epoch
+}, os.path.join(MODEL_DIR, 'last.pth'))
+print(f'Last model saved at epoch {NUM_EPOCHS}')
 
 # Function to calculate accuracy on the test dataset
 def test_model(model, dataloader, device):
