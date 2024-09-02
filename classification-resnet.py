@@ -7,8 +7,6 @@ import os
 from tqdm import tqdm  # For progress bar
 import time  # For time measurement
 
-#testing git
-
 # Input Parameters
 SEED = 42
 DATA_DIR = '/home/priyansh/Downloads/datasets/d1_classify/balanced'
