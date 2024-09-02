@@ -12,8 +12,8 @@ SEED = 42
 DATA_DIR = '/home/priyansh/Downloads/datasets/d1_classify/unbalanced'
 MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_classification_unbalanced'
 CHECKPOINT_PATH = os.path.join(MODEL_DIR, 'last.pth')
-BATCH_SIZE = 16
-NUM_EPOCHS = 1
+BATCH_SIZE = 32
+NUM_EPOCHS = 50
 
 # Set seed for reproducibility
 torch.manual_seed(SEED)
@@ -62,7 +62,7 @@ model = model.to(device)
 criterion = nn.BCELoss()  # Use binary cross entropy loss
 optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
-best_loss = float('inf')
+best_acc = 0.0
 best_epoch = 0
 
 # Load checkpoint if exists
@@ -73,7 +73,7 @@ if os.path.isfile(CHECKPOINT_PATH):
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     start_epoch = checkpoint['epoch'] + 1
-    best_loss = checkpoint['best_loss']
+    best_acc = checkpoint['best_acc']
     best_epoch = checkpoint['best_epoch']
     training_stats = checkpoint['training_stats']
 else:
@@ -133,19 +133,19 @@ for epoch in range(start_epoch, NUM_EPOCHS):
         training_stats[f'{phase}_loss'].append(epoch_loss)
         training_stats[f'{phase}_acc'].append(epoch_acc)
 
-        # Save the model if it has the best validation loss
-        if phase == 'val' and epoch_loss < best_loss:
-            best_loss = epoch_loss
+        # Save the model if it has the best validation accuracy
+        if phase == 'val' and epoch_acc > best_acc:
+            best_acc = epoch_acc
             best_epoch = epoch
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch': epoch,
-                'best_loss': best_loss,
+                'best_acc': best_acc,
                 'best_epoch': best_epoch,
                 'training_stats': training_stats
             }, os.path.join(MODEL_DIR, 'best.pth'))
-            print(f'Best model saved with loss: {best_loss:.4f}')
+            print(f'Best model saved with accuracy: {best_acc:.4f}')
 
     epoch_time = time.time() - start_time  # End timing
     print(f'Epoch {epoch+1} completed in {epoch_time:.2f} seconds\n')
@@ -155,7 +155,7 @@ torch.save({
     'model_state_dict': model.state_dict(),
     'optimizer_state_dict': optimizer.state_dict(),
     'epoch': NUM_EPOCHS - 1,
-    'best_loss': best_loss,
+    'best_acc': best_acc,
     'best_epoch': best_epoch,
     'training_stats': training_stats
 }, os.path.join(MODEL_DIR, 'last.pth'))
