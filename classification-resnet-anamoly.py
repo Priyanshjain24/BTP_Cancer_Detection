@@ -9,11 +9,11 @@ import time  # For time measurement
 
 # Input Parameters
 SEED = 42
-DATA_DIR = '/home/priyansh/Downloads/datasets/d1_classify/balanced'
-MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_classification_balanced'
+DATA_DIR = '/home/priyansh/Downloads/datasets/d1_classify/unbalanced'
+MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_classification_unbalanced'
 CHECKPOINT_PATH = os.path.join(MODEL_DIR, 'last.pth')
 BATCH_SIZE = 16
-NUM_EPOCHS = 50
+NUM_EPOCHS = 1
 
 # Set seed for reproducibility
 torch.manual_seed(SEED)
@@ -33,6 +33,10 @@ image_datasets = {
     'test': datasets.ImageFolder(os.path.join(DATA_DIR, 'test'), transform=data_transforms)
 }
 
+# Filter only the majority class (label 1) for training
+majority_class_idx = 1  # Assuming majority class is labeled as 1
+image_datasets['train'].samples = [s for s in image_datasets['train'].samples if s[1] == majority_class_idx]
+
 # Data loaders
 dataloaders = {
     'train': DataLoader(image_datasets['train'], batch_size=BATCH_SIZE, shuffle=True, num_workers=4),
@@ -43,19 +47,22 @@ dataloaders = {
 # Load pre-trained ResNet model
 model = models.resnet18(weights='ResNet18_Weights.DEFAULT')
 
-# Modify the final fully connected layer for binary classification
+# Modify the final fully connected layer for anomaly detection
 num_ftrs = model.fc.in_features
-model.fc = nn.Linear(num_ftrs, 2)  # Binary classification (2 classes)
+model.fc = nn.Sequential(
+    nn.Linear(num_ftrs, 1),  # Single output for anomaly detection
+    nn.Sigmoid()             # Sigmoid activation for binary classification
+)
 
 # Use GPU if available
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
 # Loss function and optimizer
-criterion = nn.CrossEntropyLoss()
+criterion = nn.BCELoss()  # Use binary cross entropy loss
 optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
-best_acc = 0.0
+best_loss = float('inf')
 best_epoch = 0
 
 # Load checkpoint if exists
@@ -66,7 +73,7 @@ if os.path.isfile(CHECKPOINT_PATH):
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     start_epoch = checkpoint['epoch'] + 1
-    best_acc = checkpoint['best_acc']
+    best_loss = checkpoint['best_loss']
     best_epoch = checkpoint['best_epoch']
     training_stats = checkpoint['training_stats']
 else:
@@ -93,7 +100,7 @@ for epoch in range(start_epoch, NUM_EPOCHS):
         # Use tqdm for progress bar
         for inputs, labels in tqdm(dataloaders[phase], desc=f'{phase.capitalize()} Phase', unit='batch'):
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            labels = labels.to(device).float().unsqueeze(1)  # Ensure labels are in the right shape
 
             # Zero the parameter gradients
             optimizer.zero_grad()
@@ -101,7 +108,6 @@ for epoch in range(start_epoch, NUM_EPOCHS):
             # Forward pass
             with torch.set_grad_enabled(phase == 'train'):
                 outputs = model(inputs)
-                _, preds = torch.max(outputs, 1)
                 loss = criterion(outputs, labels)
 
                 # Backward pass and optimize only if in training phase
@@ -111,6 +117,11 @@ for epoch in range(start_epoch, NUM_EPOCHS):
 
             # Statistics
             running_loss += loss.item() * inputs.size(0)
+
+            # For anomaly detection: output < 0.5 means anomaly (i.e., class 1)
+            preds = (outputs > 0.5).float()
+
+            # Accumulate correct predictions
             running_corrects += torch.sum(preds == labels.data)
 
         epoch_loss = running_loss / len(dataloaders[phase].dataset)
@@ -122,19 +133,19 @@ for epoch in range(start_epoch, NUM_EPOCHS):
         training_stats[f'{phase}_loss'].append(epoch_loss)
         training_stats[f'{phase}_acc'].append(epoch_acc)
 
-        # Deep copy the model if it has better accuracy
-        if phase == 'val' and epoch_acc > best_acc:
-            best_acc = epoch_acc
+        # Save the model if it has the best validation loss
+        if phase == 'val' and epoch_loss < best_loss:
+            best_loss = epoch_loss
             best_epoch = epoch
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'epoch': epoch,
-                'best_acc': best_acc,
+                'best_loss': best_loss,
                 'best_epoch': best_epoch,
                 'training_stats': training_stats
             }, os.path.join(MODEL_DIR, 'best.pth'))
-            print(f'Best model saved with accuracy: {best_acc:.4f}')
+            print(f'Best model saved with loss: {best_loss:.4f}')
 
     epoch_time = time.time() - start_time  # End timing
     print(f'Epoch {epoch+1} completed in {epoch_time:.2f} seconds\n')
@@ -144,7 +155,7 @@ torch.save({
     'model_state_dict': model.state_dict(),
     'optimizer_state_dict': optimizer.state_dict(),
     'epoch': NUM_EPOCHS - 1,
-    'best_acc': best_acc,
+    'best_loss': best_loss,
     'best_epoch': best_epoch,
     'training_stats': training_stats
 }, os.path.join(MODEL_DIR, 'last.pth'))
@@ -158,10 +169,10 @@ def test_model(model, dataloader, device):
     with torch.no_grad():
         for inputs, labels in dataloader:
             inputs = inputs.to(device)
-            labels = labels.to(device)
+            labels = labels.to(device).float().unsqueeze(1)
 
             outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
+            preds = (outputs > 0.5).float()  # Threshold for anomaly detection
             running_corrects += torch.sum(preds == labels.data)
 
     accuracy = running_corrects.double() / len(dataloader.dataset)
