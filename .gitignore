@@ -1,2 +1,3 @@
 myenv/
 weights/
+__pycache__/

@@ -1,0 +1,28 @@
+# Directories
+D1_OG_DIR = '/home/priyansh/Downloads/datasets/PKG - Bone-Marrow-Cytomorphology_MLL_Helmholtz_Fraunhofer_v1/Bone-Marrow-Cytomorphology/jpgs/BM_cytomorphology_data'
+D1_DATA_DIR = '/home/priyansh/Downloads/datasets/d1_classify/balanced_v1'
+MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_classification_balanced_v1'
+CHK_PTH = MODEL_DIR + '/last.pth'
+
+# Categories
+CANCER_CELLS = ["BLA", "FGC"]
+NON_CANCER_CELLS = ["ART", "BAS", "EOS", "MMZ", "MON", "MYB", "NGB", "NGS", "OTH", "LYT", "NIF", "PLM"]
+CLASSES = ['cancer', 'non_cancer']
+SPLITS = ['train', 'val', 'test']
+
+# Parameters
+SEED = 42
+BALANCE = True
+MODE = 'binary'
+BATCH_SIZE = 16
+NUM_EPOCHS = 1
+LR = 0.001
+MOMENTUM = 0.9
+CLASS_WEIGHTS = None
+KMEANS = False
+DEVICE = 'cuda'
+PREDICTION_ONLY = True
+
+# Testing Area
+D2_TEST_INP_DIR = '/home/priyansh/Downloads/datasets/seperate_testing/testdata_input_v2/control/AEC'
+D2_TEST_OUT_DIR = '/home/priyansh/Downloads/datasets/seperate_testing/testdata_output_v2/control/AEC'
