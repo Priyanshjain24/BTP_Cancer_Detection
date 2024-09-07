@@ -105,6 +105,89 @@ class ModelTrainer:
         else:
             print("No checkpoint found, starting from scratch")
 
+    def _save_checkpoint(self, name):
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'epoch': self.num_epochs - 1,
+            'best_acc': self.best_acc,
+            'training_stats': self.training_stats
+        }, os.path.join(self.model_dir, name))
+
+    def train(self):
+        for epoch in range(self.start_epoch, self.num_epochs):
+            print(f'Epoch {epoch + 1}/{self.num_epochs}')
+            print('-' * 20)
+
+            start_time = time.time()
+
+            for phase in ['train', 'val']:
+                if phase == 'train':
+                    self.model.train()
+                else:
+                    self.model.eval()
+
+                running_loss = 0.0
+                running_corrects = 0
+
+                for inputs, labels in tqdm(self.dataloaders[phase], desc=f'{phase.capitalize()} Phase', unit='batch'):
+                    inputs = inputs.to(self.device)
+                    labels = labels.to(self.device)
+
+                    if self.mode == 'anomaly':
+                        labels = labels.float().unsqueeze(1)
+
+                    self.optimizer.zero_grad()
+
+                    with torch.set_grad_enabled(phase == 'train'):
+                        outputs = self.model(inputs)
+                        loss = self.criterion(outputs, labels)
+
+                        if phase == 'train':
+                            loss.backward()
+                            self.optimizer.step()
+
+                        preds = torch.max(outputs, 1)[1] if self.mode == 'binary' else (outputs > 0.5).float()
+                        running_loss += loss.item() * inputs.size(0)
+                        running_corrects += torch.sum(preds == labels.data)
+
+                epoch_loss = running_loss / len(self.dataloaders[phase].dataset)
+                epoch_acc = running_corrects.double() / len(self.dataloaders[phase].dataset)
+
+                print(f'{phase.capitalize()} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+
+                self.training_stats[f'{phase}_loss'].append(epoch_loss)
+                self.training_stats[f'{phase}_acc'].append(epoch_acc)
+
+                if epoch_acc > self.best_acc:
+                    self.best_acc = epoch_acc
+                    self._save_checkpoint('best.pth')
+
+            epoch_time = time.time() - start_time
+            print(f'Epoch {epoch + 1} completed in {epoch_time:.2f} seconds\n')
+
+        self._save_checkpoint('last.pth')
+
+    def test(self, checkpoint='best.pth'):
+        self.model.load_state_dict(torch.load(os.path.join(self.model_dir, checkpoint))['model_state_dict'])
+        self.model.eval()
+
+        running_corrects = 0
+        with torch.no_grad():
+            for inputs, labels in self.dataloaders['test']:
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+
+                if self.mode == 'anomaly':
+                    labels = labels.float().unsqueeze(1)
+
+                outputs = self.model(inputs)
+                preds = torch.max(outputs, 1)[1] if self.mode == 'binary' else (outputs > 0.5).float()
+                running_corrects += torch.sum(preds == labels.data)
+
+        accuracy = running_corrects.double() / len(self.dataloaders['test'].dataset)
+        print(f'Test Accuracy: {accuracy:.4f}')
+
     def predict(self, data_loader):
         self.model.eval()
         all_preds = []

@@ -1,6 +1,5 @@
-import os
-import shutil
-import random
+import os, shutil, random, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from constants import *
 random.seed(SEED)
 

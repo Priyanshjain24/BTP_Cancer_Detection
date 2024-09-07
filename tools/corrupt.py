@@ -1,5 +1,6 @@
-import os
+import os, sys
 from PIL import Image
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from constants import *
 
 class ImageHandler:

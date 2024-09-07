@@ -1,7 +1,6 @@
-import os
-import shutil
-import random
+import os, shutil, random, sys
 from math import floor
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from constants import *
 random.seed(SEED)
 
@@ -61,5 +60,5 @@ class DataSplitter:
 
 # Example usage
 if __name__ == "__main__":
-    splitter = DataSplitter(data_dir=D1_DATA_DIR, classes=CLASSES, splits=SPLITS)
+    splitter = DataSplitter(data_dir=D1_DATA_DIR, classes=CLASSES, splits=SPLITS, ratio=SPLIT_RATIO)
     splitter.run()
