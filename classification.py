@@ -36,11 +36,10 @@ class ModelTrainer:
 
         self._intialize_transform(transform)
         self._initialize_model()
-        self._load_checkpoint()
-
         if not self.prediction_only:
             self._initialize_data_loaders()  # Skip data loader initialization for prediction
             self._initialize_optimizer()
+        self._load_checkpoint()
 
     def _initialize_model(self):
         self.model = models.resnet18(weights='ResNet18_Weights.DEFAULT')
