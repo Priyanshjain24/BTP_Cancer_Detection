@@ -1,3 +1,5 @@
 myenv/
 weights/
 __pycache__/
+code_v2/__pycache__
+utils/__pycache__
