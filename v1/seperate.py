@@ -1,5 +1,6 @@
-import os
+import os, sys
 import shutil
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.kmeans import KMeansPredictor
 from utils.dataloader import SingleClassImageDataset
 from torch.utils.data import DataLoader

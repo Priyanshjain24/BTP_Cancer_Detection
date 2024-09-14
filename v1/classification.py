@@ -5,7 +5,8 @@ from torchvision import datasets, models, transforms
 from torch.utils.data import DataLoader
 import os
 from tqdm import tqdm
-import time
+import time, sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from constants import *
 torch.manual_seed(SEED)
 
