@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 class ModelTrainer:
-    def __init__(self, data_dir=None, device='cpu', model_dir=None, checkpoint_path=None, batch_size=16, num_epochs=100, lr=1e-3, momentum=0.9, weight_decay=1e-4, model_name='RESNET18', prediction_only=False, class_weights=None, dropout_p=0.5, transform=None):
+    def __init__(self, data_dir=None, device='cpu', model_dir=None, checkpoint_path=None, batch_size=16, num_epochs=100, lr=1e-3, momentum=0.9, weight_decay=1e-4, model_name='RESNET18', prediction_only=False, class_weights=None, dropout_p=0.5, transform=None, patience=10, delta=0.01):
         self.data_dir = data_dir
         self.model_dir = model_dir
         self.checkpoint_path = checkpoint_path
@@ -25,9 +25,12 @@ class ModelTrainer:
         self.device = torch.device(device)
         self.model_name = model_name
         self.dropout_p = dropout_p
-        self.best_acc = 0.0
         self.start_epoch = 0
-        
+        self.patience = patience
+        self.early_stopping_counter = 0
+        self.best_val_loss = float('inf')
+        self.delta = delta
+
         # Initialize training stats
         self.training_stats = {
             'train_loss': [],
@@ -110,8 +113,8 @@ class ModelTrainer:
         }
 
     def _initialize_optimizer(self):
-        self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
-        # self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        # self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def _load_checkpoint(self):
         if os.path.isfile(self.checkpoint_path):
@@ -120,36 +123,34 @@ class ModelTrainer:
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.start_epoch = checkpoint['epoch']
-            self.best_acc = checkpoint['best_acc']
             self.training_stats = checkpoint['training_stats']
         else:
             print("No checkpoint found, starting from scratch")
 
     def to_csv(self, filename, correct_predictions, total_predictions):
-            """Save predictions and total instances to a CSV file using pandas."""
-            data = {
-                'Class': ['Cancer', 'Non Cancer', 'Total'],
-                'Correct Predictions': [
-                    correct_predictions['cancer'],
-                    correct_predictions['non_cancer'],
-                    correct_predictions['cancer'] + correct_predictions['non_cancer']
-                ],
-                'Instances': [
-                    total_predictions['cancer'],
-                    total_predictions['non_cancer'],
-                    total_predictions['cancer'] + total_predictions['non_cancer']
-                ]
-            }
-            
-            df = pd.DataFrame(data)
-            df.to_csv(filename, index=False)
+        """Save predictions and total instances to a CSV file using pandas."""
+        data = {
+            'Class': ['Cancer', 'Non Cancer', 'Total'],
+            'Correct Predictions': [
+                correct_predictions['cancer'],
+                correct_predictions['non_cancer'],
+                correct_predictions['cancer'] + correct_predictions['non_cancer']
+            ],
+            'Instances': [
+                total_predictions['cancer'],
+                total_predictions['non_cancer'],
+                total_predictions['cancer'] + total_predictions['non_cancer']
+            ]
+        }
+
+        df = pd.DataFrame(data)
+        df.to_csv(filename, index=False)
 
     def _save_checkpoint(self, name):
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'epoch': self.num_epochs - 1,
-            'best_acc': self.best_acc,
             'training_stats': self.training_stats,
         }, os.path.join(self.model_dir, name))
 
@@ -198,30 +199,36 @@ class ModelTrainer:
                 # Calculate accuracies
                 cancer_accuracy = correct_predictions['cancer'] / total['cancer'] if total['cancer'] > 0 else 0
                 non_cancer_accuracy = correct_predictions['non_cancer'] / total['non_cancer'] if total['non_cancer'] > 0 else 0
-                overall_accuracy = (correct_predictions['cancer'] + correct_predictions['non_cancer']) / (total['cancer'] + total['non_cancer']) if (total['cancer'] + total['non_cancer']) > 0 else 0
+                overall_accuracy = (correct_predictions['cancer'] + correct_predictions['non_cancer']) / (total['cancer'] + total['non_cancer'])
 
-                print(f'{phase.capitalize()} Loss: {epoch_loss:.4f}, {phase.capitalize()} Accuracy: {overall_accuracy:.4f}')
-                print(f'Cancer Accuracy: {cancer_accuracy:.4f}, Non-Cancer Accuracy: {non_cancer_accuracy:.4f}')
+                print(f"{phase} Loss: {epoch_loss:.4f} Cancer Acc: {cancer_accuracy:.4f} Non Cancer Acc: {non_cancer_accuracy:.4f} Overall Acc: {overall_accuracy:.4f}")
 
+                # Save statistics
                 self.training_stats[f'{phase}_loss'].append(epoch_loss)
-                self.training_stats[f'{phase}_acc'].append(overall_accuracy)
                 self.training_stats[f'{phase}_cancer_acc'].append(cancer_accuracy)
                 self.training_stats[f'{phase}_non_cancer_acc'].append(non_cancer_accuracy)
+                self.training_stats[f'{phase}_acc'].append(overall_accuracy)
 
-                # Save checkpoint for best accuracy
-                if overall_accuracy > self.best_acc:
-                    self.best_acc = overall_accuracy
-                    self._save_checkpoint('best.pth')
-                    self.to_csv(os.path.join(self.model_dir, 'best_predictions.csv'),
-                                             correct_predictions, total)
+                if phase == 'val':
+                    if epoch_loss > self.best_val_loss + self.delta:
+                        self.early_stopping_counter += 1
+                        print(f"Early stopping counter: {self.early_stopping_counter}/{self.patience}")
+                    else:
+                        self.early_stopping_counter = 0
+                        if epoch_loss < self.best_val_loss:
+                            self.best_val_loss = epoch_loss
+                            self._save_checkpoint("best.pth")
+                            self.to_csv(os.path.join(self.model_dir, 'best.csv'), correct_predictions, total)
+                        
+            end_time = time.time()
+            print(f"Epoch duration: {end_time - start_time:.2f} seconds")
 
-            epoch_time = time.time() - start_time
-            print(f'Epoch {epoch + 1} completed in {epoch_time:.2f} seconds\n')
+            if self.early_stopping_counter >= self.patience:
+                print("Early stopping triggered")
+                break
 
-        # Save last epoch checkpoint
-        self._save_checkpoint('last.pth')
-        self.to_csv(os.path.join(self.model_dir, 'last_predictions.csv'),
-                                 correct_predictions, total)
+        self._save_checkpoint("last.pth")
+        self.to_csv(os.path.join(self.model_dir, 'last.csv'), correct_predictions, total)
 
     def predict(self, data_loader):
         self.model.eval()
@@ -237,9 +244,15 @@ class ModelTrainer:
 # Starting Training
 if __name__ == "__main__":
 
-    # for dropout in np.arange(0, 0.1, 0.1):
-    for dropout in [0.0, 0.2, 0.4]:
-        model_dir = MODEL_DIR + '/dropout=' + "{:.2f}".format(dropout)
-        chk_path = model_dir + '/last.pth'
-        trainer = ModelTrainer(D1_DATA_DIR, DEVICE, model_dir, chk_path, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, dropout)
-        trainer.train()
+    for batch_size in [8, 16, 32]:
+        for lr in np.arange(1e-4, 1e-3, 2e-4):
+            for weight_decay in np.arange(1e-4, 1e-3, 2e-4):
+                # for dropout in np.arange(0.2, 0.5, 0.1):
+                dropout = 0.3
+                model_dir = f"{MODEL_DIR}/bs={batch_size}_lr={lr:.0e}_wd={weight_decay:.0e}_dr={dropout:.1f}"
+                chk_path = model_dir + '/last.pth'
+                if os.path.exists(chk_path):
+                    continue
+                print(os.path.split(model_dir)[-1])
+                trainer = ModelTrainer(D1_DATA_DIR, DEVICE, model_dir, chk_path, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, dropout, None, PATIENCE, DELTA)
+                trainer.train()
