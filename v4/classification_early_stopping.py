@@ -2,16 +2,17 @@ import torch, os, sys, time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from constants import *
 torch.manual_seed(SEED)
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets, models, transforms
-from torch.utils.data import DataLoader
-from tqdm import tqdm
+from sklearn.metrics import confusion_matrix
 import pandas as pd
 import numpy as np
+from torchvision import datasets, models, transforms
+from torch.utils.data import DataLoader
+import torch.nn as nn
+import torch.optim as optim
+from tqdm import tqdm
 
 class ModelTrainer:
-    def __init__(self, data_dir=None, device='cpu', model_dir=None, checkpoint_path=None, batch_size=16, num_epochs=100, lr=1e-3, momentum=0.9, weight_decay=1e-4, model_name='RESNET18', prediction_only=False, class_weights=None, dropout_p=0.5, transform=None, patience=10, delta=0.01):
+    def __init__(self, data_dir=None, device='cpu', model_dir=None, checkpoint_path=None, batch_size=16, num_epochs=100, lr=1e-3, momentum=0.9, weight_decay=1e-4, model_name='RESNET18', prediction_only=False, class_weights=None, dropout_p=0.5, transform=None, patience=10, delta=0.01, num_classes=2):
         self.data_dir = data_dir
         self.model_dir = model_dir
         self.checkpoint_path = checkpoint_path
@@ -30,6 +31,8 @@ class ModelTrainer:
         self.early_stopping_counter = 0
         self.best_val_loss = float('inf')
         self.delta = delta
+        self.num_classes = num_classes
+        self.class_names = []
 
         # Initialize training stats
         self.training_stats = {
@@ -37,16 +40,11 @@ class ModelTrainer:
             'train_acc': [],
             'val_loss': [],
             'val_acc': [],
-            'train_cancer_acc': [],
-            'train_non_cancer_acc': [],
-            'val_cancer_acc': [],
-            'val_non_cancer_acc': []
         }
 
         self._setup(transform)
 
     def _setup(self, transform):
-
         os.makedirs(self.model_dir, exist_ok=True)
         self._initialize_transform(transform)
         self._initialize_model()
@@ -84,11 +82,8 @@ class ModelTrainer:
         num_ftrs = self.model.fc.in_features if hasattr(self.model, 'fc') else self.model.classifier[-1].in_features
         layer = nn.Sequential(
             nn.Dropout(self.dropout_p),
-            nn.Linear(num_ftrs, 2))
-        if hasattr(self.model, 'fc'):
-            self.model.fc = layer
-        else:
-            self.model.classifier[-1] = layer
+            nn.Linear(num_ftrs, self.num_classes))  # number of output classes
+        self.model.fc = layer
         weights = torch.tensor(self.class_weights, dtype=torch.float).to(self.device) if self.class_weights is not None else None
         self.criterion = nn.CrossEntropyLoss(weight=weights)
         self.model = self.model.to(self.device)
@@ -111,9 +106,9 @@ class ModelTrainer:
             'train': DataLoader(image_datasets['train'], batch_size=self.batch_size, shuffle=True, num_workers=4),
             'val': DataLoader(image_datasets['val'], batch_size=self.batch_size, shuffle=False, num_workers=4)
         }
+        self.class_names = image_datasets['train'].classes
 
     def _initialize_optimizer(self):
-        # self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def _load_checkpoint(self):
@@ -127,25 +122,6 @@ class ModelTrainer:
         else:
             print("No checkpoint found, starting from scratch")
 
-    def to_csv(self, filename, correct_predictions, total_predictions):
-        """Save predictions and total instances to a CSV file using pandas."""
-        data = {
-            'Class': ['Cancer', 'Non Cancer', 'Total'],
-            'Correct Predictions': [
-                correct_predictions['cancer'],
-                correct_predictions['non_cancer'],
-                correct_predictions['cancer'] + correct_predictions['non_cancer']
-            ],
-            'Instances': [
-                total_predictions['cancer'],
-                total_predictions['non_cancer'],
-                total_predictions['cancer'] + total_predictions['non_cancer']
-            ]
-        }
-
-        df = pd.DataFrame(data)
-        df.to_csv(filename, index=False)
-
     def _save_checkpoint(self, name):
         torch.save({
             'model_state_dict': self.model.state_dict(),
@@ -153,6 +129,11 @@ class ModelTrainer:
             'epoch': self.num_epochs - 1,
             'training_stats': self.training_stats,
         }, os.path.join(self.model_dir, name))
+
+    def _write_csv(self, filename, conf_matrix):
+        """Save only the confusion matrix to a CSV file."""
+        conf_matrix_df = pd.DataFrame(conf_matrix, index=self.class_names, columns=self.class_names)
+        conf_matrix_df.to_csv(filename, mode='w')
 
     def train(self):
         for epoch in range(self.start_epoch, self.num_epochs):
@@ -168,8 +149,10 @@ class ModelTrainer:
                     self.model.eval()
 
                 running_loss = 0.0
-                correct_predictions = {'cancer': 0, 'non_cancer': 0}
-                total = {'cancer': 0, 'non_cancer': 0}
+                correct_predictions = {class_name: 0 for class_name in self.class_names}
+                total = {class_name: 0 for class_name in self.class_names}
+                all_labels = []
+                all_preds = []
 
                 for inputs, labels in tqdm(self.dataloaders[phase], desc=f'{phase.capitalize()} Phase', unit='batch'):
                     inputs = inputs.to(self.device)
@@ -188,26 +171,24 @@ class ModelTrainer:
                         preds = torch.max(outputs, 1)[1]
                         running_loss += loss.item() * inputs.size(0)
 
-                        # Update class-wise correct/total
-                        correct_predictions['cancer'] += ((labels == 1) & (preds == 1)).sum().item()
-                        total['cancer'] += (labels == 1).sum().item()
-                        correct_predictions['non_cancer'] += ((labels == 0) & (preds == 0)).sum().item()
-                        total['non_cancer'] += (labels == 0).sum().item()
+                        # Collect predictions and labels
+                        all_labels.extend(labels.cpu().numpy())
+                        all_preds.extend(preds.cpu().numpy())
 
                 epoch_loss = running_loss / len(self.dataloaders[phase].dataset)
+                epoch_acc = (np.array(all_preds) == np.array(all_labels)).mean()
 
-                # Calculate accuracies
-                cancer_accuracy = correct_predictions['cancer'] / total['cancer'] if total['cancer'] > 0 else 0
-                non_cancer_accuracy = correct_predictions['non_cancer'] / total['non_cancer'] if total['non_cancer'] > 0 else 0
-                overall_accuracy = (correct_predictions['cancer'] + correct_predictions['non_cancer']) / (total['cancer'] + total['non_cancer'])
-
-                print(f"{phase} Loss: {epoch_loss:.4f} Cancer Acc: {cancer_accuracy:.4f} Non Cancer Acc: {non_cancer_accuracy:.4f} Overall Acc: {overall_accuracy:.4f}")
-
-                # Save statistics
+                # Calculate confusion matrix
+                conf_matrix = confusion_matrix(all_labels, all_preds)
+                
                 self.training_stats[f'{phase}_loss'].append(epoch_loss)
-                self.training_stats[f'{phase}_cancer_acc'].append(cancer_accuracy)
-                self.training_stats[f'{phase}_non_cancer_acc'].append(non_cancer_accuracy)
-                self.training_stats[f'{phase}_acc'].append(overall_accuracy)
+                self.training_stats[f'{phase}_acc'].append(epoch_acc)
+                print(f'{phase.capitalize()} Overall Accuracy: {epoch_acc:.4f}')
+
+                # Calculate class-wise accuracies
+                class_accuracies = conf_matrix.diagonal() / conf_matrix.sum(axis=1)
+                for idx, class_name in enumerate(self.class_names):
+                    print(f'{phase.capitalize()} Accuracy for {class_name}: {class_accuracies[idx]:.4f}')
 
                 if phase == 'val':
                     if epoch_loss > self.best_val_loss + self.delta:
@@ -218,8 +199,8 @@ class ModelTrainer:
                         if epoch_loss < self.best_val_loss:
                             self.best_val_loss = epoch_loss
                             self._save_checkpoint("best.pth")
-                            self.to_csv(os.path.join(self.model_dir, 'best.csv'), correct_predictions, total)
-                        
+                            self._write_csv(os.path.join(self.model_dir, 'best_conf_matrix.csv'), conf_matrix)
+
             end_time = time.time()
             print(f"Epoch duration: {end_time - start_time:.2f} seconds")
 
@@ -228,7 +209,7 @@ class ModelTrainer:
                 break
 
         self._save_checkpoint("last.pth")
-        self.to_csv(os.path.join(self.model_dir, 'last.csv'), correct_predictions, total)
+        self._write_csv(os.path.join(self.model_dir, 'last_conf_matrix.csv'), conf_matrix)
 
     def predict(self, data_loader):
         self.model.eval()
@@ -243,19 +224,5 @@ class ModelTrainer:
 
 # Starting Training
 if __name__ == "__main__":
-
-    trainer = ModelTrainer(D1_DATA_DIR, DEVICE, MODEL_DIR, CHK_PTH, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, DROPOUT, None, PATIENCE, DELTA)
+    trainer = ModelTrainer(D1_DATA_DIR, DEVICE, MODEL_DIR, CHK_PTH, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, DROPOUT, None, PATIENCE, DELTA, NUM_CLASSES)
     trainer.train()
-
-    # for batch_size in [8, 16, 32]:
-    #     for lr in np.arange(1e-4, 1e-3, 2e-4):
-    #         for weight_decay in np.arange(1e-4, 1e-3, 2e-4):
-    #             # for dropout in np.arange(0.2, 0.5, 0.1):
-    #             dropout = 0.3
-    #             model_dir = f"{MODEL_DIR}/bs={batch_size}_lr={lr:.0e}_wd={weight_decay:.0e}_dr={dropout:.1f}"
-    #             chk_path = model_dir + '/last.pth'
-    #             if os.path.exists(chk_path):
-    #                 continue
-    #             print(os.path.split(model_dir)[-1])
-    #             trainer = ModelTrainer(D1_DATA_DIR, DEVICE, model_dir, chk_path, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, dropout, None, PATIENCE, DELTA)
-    #             trainer.train()
