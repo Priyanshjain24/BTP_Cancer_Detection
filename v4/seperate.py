@@ -2,7 +2,7 @@ import os, shutil, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.dataloader import SingleClassImageDataset
 from torch.utils.data import DataLoader
-from classification_early_stopping import ModelTrainer
+from v4.classification import ModelTrainer
 from torchvision import transforms
 from constants import *
 
