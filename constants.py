@@ -1,7 +1,7 @@
 # Directories
 D1_OG_DIR = '/home/priyansh/Downloads/datasets/og_data/PKG - Bone-Marrow-Cytomorphology_MLL_Helmholtz_Fraunhofer_v1/Bone-Marrow-Cytomorphology/jpgs/BM_cytomorphology_data'
 D1_DATA_DIR = '/home/priyansh/Downloads/datasets/mod_data/d1_classify/balanced'
-MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_balanced/final_v1/RESNET18'
+MODEL_DIR = '/home/priyansh/Downloads/code/weights/d1_balanced/nft_v1/RESNET18'
 CHK_PTH = MODEL_DIR + '/last.pth'
 
 # Categories
@@ -29,6 +29,7 @@ DROPOUT = 0.3
 PATIENCE = 50
 DELTA = 0.02
 NUM_CLASSES = 2
+FREEZE_LAYERS = True
 
 # Testing Area
 D2_TEST_INP_DIR = '/home/priyansh/Downloads/datasets/og_data/PKG - AML-Cytomorphology_MLL_Helmholtz_v1/data'
