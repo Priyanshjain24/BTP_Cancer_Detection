@@ -99,7 +99,7 @@ class ModelTrainer:
                 param.requires_grad = True
 
         weights = torch.tensor(self.class_weights, dtype=torch.float).to(self.device) if self.class_weights is not None else None
-        self.criterion = nn.CrossEntropyLoss(weight=weights)
+        self.criterion = nn.CrossEntropyLoss(weight=weights, label_smoothing=0.2)
         self.model = self.model.to(self.device)
 
     def _initialize_transform(self, transform):
@@ -123,7 +123,8 @@ class ModelTrainer:
         self.class_names = image_datasets['train'].classes
 
     def _initialize_optimizer(self):
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+#         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay)
 
     def _load_checkpoint(self):
         if os.path.isfile(self.checkpoint_path):
@@ -248,6 +249,5 @@ class ModelTrainer:
 
 # Starting Training
 if __name__ == "__main__":
-    trainer = ModelTrainer(D1_DATA_DIR, DEVICE, MODEL_DIR, CHK_PTH, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, DROPOUT, None, PATIENCE, DELTA, NUM_CLASSES, FREEZE_LAYERS)
-
-
+    trainer = ModelTrainer(D2_TEST_SC_DIR, DEVICE, MODEL_DIR, CHK_PTH, BATCH_SIZE, NUM_EPOCHS, LR, MOMENTUM, WEIGHT_DECAY, MODEL, PREDICTION_ONLY, CLASS_WEIGHTS, DROPOUT, None, PATIENCE, DELTA, NUM_CLASSES, FREEZE_LAYERS)
+    trainer.train()
