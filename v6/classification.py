@@ -37,7 +37,7 @@ model_manager = ModelManager(
     model_name=args.model,
     num_classes=args.num_classes,
     device=DEVICE,
-    checkpoint_path=os.path.join(args.model_dir, "last.pth"),
+    checkpoint_path=os.path.join(args.model_dir, "best.pth"),
     use_multi_gpu=args.multi_gpu,
     model_dir=args.model_dir
 )

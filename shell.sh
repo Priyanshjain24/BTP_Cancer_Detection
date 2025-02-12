@@ -2,13 +2,13 @@
 
 # Define the models and their directories
 MODELS=(
-    "RESNET18"
+    # "RESNET18"
     "RESNET34"
     "RESNET50"
-    "CONVNEXT_TINY"
+    # "CONVNEXT_TINY"
     "SWIN_TRANSFORMER_TINY"
-    "VGG11"
-    "VGG13"
+    # "VGG11"
+    # "VGG13"
     "VGG16"
     "VGG19"
     "EFFICIENT_NET"
@@ -27,10 +27,16 @@ MULTI_GPU="--multi_gpu"  # Remove if you don't want multi-GPU support
 
 # Loop through each model and run training
 for MODEL in "${MODELS[@]}"; do
+    conda init
+    conda activate ./env/
     MODEL_DIR="${BASE_MODEL_DIR}/${MODEL}"
-    
-    echo "Starting training for model: $MODEL"
-    
+    LOG_FILE="${MODEL_DIR}/training.log"
+
+    # Create model directory if it doesn't exist
+    mkdir -p "$MODEL_DIR"
+
+    echo "Starting training for model: $MODEL" | tee -a "$LOG_FILE"
+
     python v6/classification.py \
         --model "$MODEL" \
         --num_classes "$NUM_CLASSES" \
@@ -42,8 +48,9 @@ for MODEL in "${MODELS[@]}"; do
         --epochs "$EPOCHS" \
         --lr "$LR" \
         --weight_decay "$WEIGHT_DECAY" \
-        $MULTI_GPU
+        $MULTI_GPU \
+        2>&1 | tee -a "$LOG_FILE"
 
-    echo "Finished training for model: $MODEL"
-    echo "-----------------------------------"
+    echo "Finished training for model: $MODEL" | tee -a "$LOG_FILE"
+    echo "-----------------------------------" | tee -a "$LOG_FILE"
 done
