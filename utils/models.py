@@ -39,14 +39,21 @@ class ModelManager:
         for param in model.parameters():
             param.requires_grad = not self.freeze_layers
 
-        # Adjust classifier layer
-        num_ftrs = model.fc.in_features if hasattr(model, 'fc') else model.classifier[-1].in_features
-        classifier_layer = nn.Sequential(nn.Dropout(self.dropout_p), nn.Linear(num_ftrs, self.num_classes))
+         # Adjust classifier layer dynamically
+        if hasattr(model, 'fc'):  # ResNet models
+            num_ftrs = model.fc.in_features
+            model.fc = nn.Sequential(nn.Dropout(self.dropout_p), nn.Linear(num_ftrs, self.num_classes))
 
-        if hasattr(model, 'fc'):
-            model.fc = classifier_layer
-        elif hasattr(model, 'classifier'):
-            model.classifier[-1] = classifier_layer
+        elif hasattr(model, 'classifier'):  # VGG, EfficientNet, ConvNeXt
+            num_ftrs = model.classifier[-1].in_features
+            model.classifier[-1] = nn.Sequential(nn.Dropout(self.dropout_p), nn.Linear(num_ftrs, self.num_classes))
+
+        elif hasattr(model, 'head'):  # Swin Transformer, RegNet
+            num_ftrs = model.head.in_features
+            model.head = nn.Sequential(nn.Dropout(self.dropout_p), nn.Linear(num_ftrs, self.num_classes))
+
+        else:
+            raise ValueError(f"Unknown classifier structure for model: {self.model_name}")
 
         if self.use_multi_gpu and torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs for training!")

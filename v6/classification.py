@@ -121,3 +121,4 @@ for epoch in range(start_epoch, args.epochs):
 
 model_manager.save_checkpoint("last.pth", args.epochs, training_stats)
 trainer_config.write_csv('last_conf_matrix.csv', conf_matrix)
+trainer_config.save_plots(training_stats)
