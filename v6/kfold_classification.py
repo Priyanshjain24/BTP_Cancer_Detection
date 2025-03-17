@@ -23,7 +23,7 @@ parser.add_argument("--epochs", type=int, default=2, help="Number of training ep
 parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
 parser.add_argument("--weight_decay", type=float, default=1e-3, help="Weight decay")
 parser.add_argument("--multi_gpu", action="store_true", help="Use multiple GPUs if available")
-parser.add_argument("--device", type=str, choices=["cpu", "cuda"], help="Device to use (cpu or cuda)")
+parser.add_argument("--device", type=str, choices=["cpu", "cuda:0", "cuda:1"], help="Device to use (cpu or cuda)")
 parser.add_argument("--k_folds", type=int, default=4, help="Number of folds for cross-validation")
 
 args = parser.parse_args()

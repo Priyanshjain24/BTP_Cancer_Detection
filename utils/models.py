@@ -27,7 +27,10 @@ class ModelManager:
             'CONVNEXT_TINY': models.convnext_tiny(weights='ConvNeXt_Tiny_Weights.DEFAULT'),
             'REGNET': models.regnet_y_400mf(weights='RegNet_Y_400MF_Weights.DEFAULT'),
             'SWIN_TRANSFORMER_TINY': models.swin_t(weights='Swin_T_Weights.DEFAULT'),
-            'EFFICIENT_NET': models.efficientnet_b0(weights='EfficientNet_B0_Weights.DEFAULT')
+            'EFFICIENT_NET': models.efficientnet_b0(weights='EfficientNet_B0_Weights.DEFAULT'),
+            'MOBILENET': models.mobilenet_v3_small(weights='MobileNet_V3_Small_Weights.DEFAULT'),  
+            'SHUFFLENET': models.shufflenet_v2_x2_0(weights='ShuffleNet_V2_X2_0_Weights.DEFAULT'),
+            'INCEPTION_NET': models.inception_v3(weights='Inception_V3_Weights.DEFAULT')  
         }
 
         if self.model_name not in model_dict:

@@ -55,7 +55,7 @@ class TrainerConfig:
 
     def _setup_optimizer(self):
         """Set up optimizer and loss function."""
-        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         criterion = nn.CrossEntropyLoss()
         return optimizer, criterion
 

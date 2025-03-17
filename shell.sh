@@ -4,7 +4,7 @@
 MODELS=(
     "RESNET18"
     "RESNET34"
-    # "RESNET50"
+    "RESNET50"
     # "CONVNEXT_TINY"
     # "REGNET"
     # "SWIN_TRANSFORMER_TINY"
@@ -13,14 +13,17 @@ MODELS=(
     # "VGG16"
     # "VGG19"
     # "EFFICIENT_NET"
+    # "MOBILENET"
+    # "SHUFFLENET"
+    # "INCEPTION_NET"
 )
 
 NUM_CLASSES=4
 DATA_DIR="/home/Drivehd2tb/garima/datasets/mod_data/d2_classify/sc/complete"
 BASE_MODEL_DIR="/home/Drivehd2tb/garima/code/weights_new/d2_classify"
 BATCH_SIZE=128
-EPOCHS=500
-LR=1e-3
+EPOCHS=100
+LR=1e-6
 WEIGHT_DECAY=1e-3
 PATIENCE=20
 DELTA=0.01
@@ -31,7 +34,7 @@ FOLDS=4
 for MODEL in "${MODELS[@]}"; do
     # conda init
     # conda activate ./env/
-    MODEL_DIR="${BASE_MODEL_DIR}/${MODEL}/kfold/v1"
+    MODEL_DIR="${BASE_MODEL_DIR}/${MODEL}/kfold/bs${BATCH_SIZE}_lr${LR}_wd${WEIGHT_DECAY}"
     LOG_FILE="${MODEL_DIR}/training.log"
 
     # Create model directory if it doesn't exist
@@ -50,6 +53,7 @@ for MODEL in "${MODELS[@]}"; do
         --epochs "$EPOCHS" \
         --lr "$LR" \
         --weight_decay "$WEIGHT_DECAY" \
+        --device "cuda:1" \
         # $MULTI_GPU \
         2>&1 | tee -a "$LOG_FILE"
 
