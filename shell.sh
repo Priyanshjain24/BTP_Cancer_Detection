@@ -18,15 +18,15 @@ MODELS=(
     # "INCEPTION_NET"
 )
 
-NUM_CLASSES=4
-DATA_DIR="/home/Drivehd2tb/garima/datasets/mod_data/d2_classify/sc/complete"
-BASE_MODEL_DIR="/home/Drivehd2tb/garima/code/weights_new/d2_classify"
+NUM_CLASSES=2
+DATA_DIR="/home/Drivehd2tb/garima/datasets/mod_data/d1_classify/complete_balanced"
+BASE_MODEL_DIR="/home/Drivehd2tb/garima/code/weights_new/d1_classify"
 BATCH_SIZE=128
 EPOCHS=100
 LR=1e-6
 WEIGHT_DECAY=1e-3
-PATIENCE=20
-DELTA=0.01
+PATIENCE=50
+DELTA=0.02
 MULTI_GPU="--multi_gpu"  # Remove if you don't want multi-GPU support
 FOLDS=4
 
